@@ -20,7 +20,7 @@ __device__ void merge(Body *body_vec, int bodies_count) {
     if (tmp.mass == 0.f)
         return;
 
-    // ERROR IN MULTICOLISION !!!!
+    // ERROR IN MULTICOLLISION !!!!
     for (int i = idx + 1; i < bodies_count; i++) {
         if (body_vec[i].mass == 0.f)
             continue;
@@ -51,7 +51,7 @@ __device__ void merge(Body *body_vec, int bodies_count) {
 }
 
 __device__ void update_positions(Body *body_vec, size_t bodies_count) {
-    constexpr auto step = 0.1f;
+    constexpr auto step = 0.2f;
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx > bodies_count)
         return;
@@ -65,7 +65,7 @@ __device__ void update_positions(Body *body_vec, size_t bodies_count) {
 
         auto X = body_vec[i].x - tmp.x, Y = body_vec[i].y - tmp.y;
         auto D2 = (X * X + Y * Y);
-        auto F = 6.674184 * 10e-7 * (tmp.mass * body_vec[i].mass) / D2;
+        auto F = 6.674184 * 10e-9 * (tmp.mass * body_vec[i].mass) / D2;
         auto D = sqrt(D2);
 
         Fx += F * X / D;
@@ -95,14 +95,15 @@ void Physics::load(const std::vector<Body> &bodies) {
         cudaFree(gpu_bodies_vec_);
 
     cudaMalloc(&gpu_bodies_vec_, sizeof(Body) * bodies.size());
+    // cuda Malloc Host
     cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
 }
 
 void Physics::update(std::vector<Body> &bodies) {
     dim3 threads = dim3(64, 1);
-    dim3 blocks = bodies.size() / threads.x != 0 ? dim3(bodies.size() / threads.x, 1) : dim3(1, 1);
+    dim3 blocks = bodies.size() / threads.x != 0 ? dim3((bodies.size() / threads.x) + 1, 1) : dim3(1, 1);
 
-    cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
+//    cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
     update_gpu_bodies<<<blocks, threads>>>(gpu_bodies_vec_, bodies.size());
     cudaMemcpy(bodies.data(), gpu_bodies_vec_, sizeof(Body) * bodies.size(), cudaMemcpyDeviceToHost);
 }

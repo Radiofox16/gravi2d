@@ -21,6 +21,4 @@ public:
     void update(std::vector<Body> &bodies);
 };
 
-void add_h(Body *a, Body *b, Body *c);
-
 #endif //GRAVI2D_PHYSICS_HPP

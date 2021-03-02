@@ -4,14 +4,14 @@
 #include "Physics.hpp"
 
 constexpr auto WINDOW_NAME = "gravi2d";
-constexpr auto SCENE_WIDTH = 1080;
-constexpr auto SCENE_HEIGHT = 1080;
+constexpr auto SCENE_WIDTH = 1280;
+constexpr auto SCENE_HEIGHT = 1280;
 
-constexpr auto SPAWN_AREA_SIZE = 4000.f;
-constexpr auto SPAWN_BODIES_COUNT = 8192;
-constexpr auto SPAWN_MAX_MASS = 10000000.f;
+constexpr auto SPAWN_AREA_SIZE = 6000.f;
+constexpr auto SPAWN_BODIES_COUNT = 12 * 1024;
+constexpr auto SPAWN_MAX_MASS = 1000000000.f;
 constexpr auto SPAWN_MAX_RADIUS = 10.f;
-constexpr auto SPAWN_MAX_ABS_SPEED = 10.f;
+constexpr auto SPAWN_MAX_ABS_SPEED = 15.f;
 
 int main() {
     Window<SCENE_WIDTH, SCENE_HEIGHT> window;
@@ -24,16 +24,13 @@ int main() {
 
     physics.load(bodies);
 
-    int i = 0;
-
     while (key != 27 && key != 'q') {
         t.reset();
         physics.update(bodies);
         auto update_tm = t.value();
 
-        window.draw(WINDOW_NAME, bodies, SPAWN_AREA_SIZE);
+        window.draw(WINDOW_NAME, bodies, SPAWN_AREA_SIZE * 2);
         key = cv::waitKey(1); // TEMPORARY
-        i++;
     }
 
     cv::destroyWindow(WINDOW_NAME);
