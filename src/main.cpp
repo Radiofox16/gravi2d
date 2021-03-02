@@ -7,11 +7,11 @@ constexpr auto WINDOW_NAME = "gravi2d";
 constexpr auto SCENE_WIDTH = 1280;
 constexpr auto SCENE_HEIGHT = 1280;
 
-constexpr auto SPAWN_AREA_SIZE = 6000.f;
-constexpr auto SPAWN_BODIES_COUNT = 12 * 1024;
-constexpr auto SPAWN_MAX_MASS = 1000000000.f;
-constexpr auto SPAWN_MAX_RADIUS = 10.f;
-constexpr auto SPAWN_MAX_ABS_SPEED = 15.f;
+constexpr auto SPAWN_AREA_SIZE = 500.f;
+constexpr auto SPAWN_BODIES_COUNT = 1024;
+constexpr auto SPAWN_MAX_MASS = 10000000000.f;
+constexpr auto SPAWN_MAX_RADIUS = 100.f;
+constexpr auto SPAWN_MAX_ABS_SPEED = 0.f;
 
 int main() {
     Window<SCENE_WIDTH, SCENE_HEIGHT> window;
