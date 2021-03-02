@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string_view>
 #include <vector>
+#include <array>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -54,7 +55,7 @@ public:
 
     constexpr auto height() const { return t_height; };
 
-    void draw(const std::string_view window_name, const std::vector<Body> &bodies, float horizontal_scene_size) {
+    void draw(const char *window_name, const std::vector<Body> &bodies, float horizontal_scene_size) {
         scene_ = cv::Mat::zeros(scene_.size(), scene_.type());
         auto coord_bias = horizontal_scene_size / 2.f;
         auto pix_per_coord = t_width / horizontal_scene_size;
@@ -67,7 +68,7 @@ public:
                        BODIES_COLORS[body.id % BODIES_COLORS.size()], cv::FILLED);
         }
 
-        cv::imshow(window_name.data(), scene_);
+        cv::imshow(window_name, scene_);
     }
 };
 
