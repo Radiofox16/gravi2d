@@ -5,6 +5,7 @@
 #include "Physics.hpp"
 #include <algorithm>
 #include <limits>
+#include <iostream>
 
 constexpr int THREAD_WARP_SIZE = 32;
 
@@ -14,53 +15,81 @@ __device__ bool intersect(const Body &l, const Body &r) {
 }
 
 __device__ void merge_two_bodies(Body &a, const Body &b) {
-    a.x = a.radius > b.radius ? a.x : b.x;
-    a.y = a.radius > b.radius ? a.y : b.y;
+    if (a.mass == 0.f || b.mass == 0.f)
+        return;
+
+    a.x = (a.x + b.x) / 2;
+    a.y = (a.y + b.y) / 2;
 
     a.radius = sqrt(a.radius * a.radius + b.radius * b.radius);
 
     auto mass_sum = b.mass + a.mass;
-    a.speed_x =
-            a.speed_x * (a.mass / mass_sum) + (b.speed_x) * (b.mass / mass_sum);
-    a.speed_y =
-            a.speed_y * (a.mass / mass_sum) + (b.speed_y) * (b.mass / mass_sum);
+    a.speed_x = a.speed_x * (a.mass / mass_sum) + (b.speed_x) * (b.mass / mass_sum);
+    a.speed_y = a.speed_y * (a.mass / mass_sum) + (b.speed_y) * (b.mass / mass_sum);
 
     a.mass = mass_sum;
 }
 
 __device__ void merge(Body *body_vec, int bodies_count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
-    if (idx > bodies_count)
-        return;
 
     __shared__ Body cached_bodies[THREAD_WARP_SIZE];
     Body current_body = body_vec[idx];
-    cached_bodies[threadIdx.x] = body_vec[idx];
-    __syncwarp();
+
+    cached_bodies[threadIdx.x] = idx < bodies_count ? current_body : Body{0, 0, 0, 0, 0, 0, 0, idx, -1000};
+
+    __syncthreads();
 
     for (int i = 0; i < THREAD_WARP_SIZE; i++) {
+        if (threadIdx.x == i || current_body.mass == 0.f) continue;
+        if (cached_bodies[i].mass == 0.f) continue;
+
         if (intersect(current_body, cached_bodies[i])) {
-            if (current_body.id < cached_bodies[i].id)
-                current_body.mass = 0.f;
-            else
+            if (threadIdx.x > i) {
+                current_body = {0, 0, 0, 0, 0, 0, 0, idx, blockIdx.x * blockDim.x + i};
+            } else {
                 merge_two_bodies(current_body, cached_bodies[i]);
+                current_body.dbg_1 = idx;
+                current_body.dbg_2 = blockIdx.x * blockDim.x + i;
+            }
+        }
+    }
+
+    __syncthreads();
+
+    for (int i = 0; i < blockIdx.x; i++) {
+        cached_bodies[threadIdx.x] = body_vec[i * blockDim.x + threadIdx.x];
+        __syncthreads();
+
+        if (current_body.mass == 0.f) continue;
+
+        for (int j = 0; j < THREAD_WARP_SIZE; j++) {
+            if (cached_bodies[j].mass == 0.f)
+                continue;
+
+            if (intersect(current_body, cached_bodies[j])) {
+                current_body.mass = 0.f;
+            }
         }
     }
 
     for (int i = blockIdx.x + 1; i < gridDim.x; i++) {
-        cached_bodies[threadIdx.x] = body_vec[i * blockDim.x + threadIdx.x];
-        __syncwarp();
+        if (i * blockDim.x + threadIdx.x > bodies_count) {
+            cached_bodies[threadIdx.x] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+        } else {
+            cached_bodies[threadIdx.x] = body_vec[i * blockDim.x + threadIdx.x];
+        }
+
+        __syncthreads();
+
+        if (current_body.mass == 0.f) continue;
 
         for (int j = 0; j < THREAD_WARP_SIZE; j++) {
-            auto tmp = cached_bodies[j];
-            if (tmp.mass == 0.f)
+            if (cached_bodies[j].mass == 0.f)
                 continue;
 
-            if (intersect(current_body, tmp)) {
-                if (current_body.id < cached_bodies[i].id)
-                    current_body.mass = 0.f;
-                else
-                    merge_two_bodies(current_body, cached_bodies[i]);
+            if (intersect(current_body, cached_bodies[j])) {
+                merge_two_bodies(current_body, cached_bodies[j]);
             }
         }
     }
@@ -69,7 +98,7 @@ __device__ void merge(Body *body_vec, int bodies_count) {
 }
 
 __device__ void update_positions(Body *body_vec, size_t bodies_count) {
-    constexpr auto step = 0.2f;
+    constexpr auto step = 1.f;
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx > bodies_count)
         return;
@@ -85,7 +114,7 @@ __device__ void update_positions(Body *body_vec, size_t bodies_count) {
 
         auto X = tmp.x - current_body.x, Y = tmp.y - current_body.y;
         auto D2 = (X * X + Y * Y);
-        auto F = 6.674184 * 10e-9 * (current_body.mass * tmp.mass) / D2;
+        auto F = 6.674184 * 10e-9 * static_cast<double >(current_body.mass * tmp.mass) / D2;
         auto D = sqrt(D2);
 
         if (D < (tmp.radius + current_body.radius))
@@ -154,9 +183,10 @@ void Physics::update(std::vector<Body> &bodies) {
                 tmp.push_back(b);
         }
 
-        for (int i = 0; i < THREAD_WARP_SIZE - (bodies.size() % THREAD_WARP_SIZE); i++) {
-            tmp.push_back({});
-        }
+//        auto sz_diff = bodies.size() - tmp.size();
+//        for (int i = 0; i < sz_diff; i++) {
+//            tmp.push_back({});
+//        }
 
         bodies = tmp;
     }
@@ -167,4 +197,16 @@ void Physics::update(std::vector<Body> &bodies) {
     cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
     update_gpu_bodies<<<blocks, threads>>>(gpu_bodies_vec_, bodies.size());
     cudaMemcpy(bodies.data(), gpu_bodies_vec_, sizeof(Body) * bodies.size(), cudaMemcpyDeviceToHost);
+
+//    float rad_sz = 0.f;
+//    for (auto &a: bodies) {
+//        rad_sz += a.radius;
+//        if (a.dbg_1 == 0 && a.dbg_2 == 0) continue;
+//        std::cout << "dbg_1: " << a.dbg_1;
+//        std::cout << " | dbg_2: " << a.dbg_2 << '\n';
+//        a.dbg_1 = 0;
+//        a.dbg_2 = 0;
+//
+//    }
+//    std::cout << "------------------ sz: " << bodies.size() << "------------------\n";
 }

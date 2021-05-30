@@ -7,9 +7,9 @@ constexpr auto WINDOW_NAME = "gravi2d";
 constexpr auto SCENE_WIDTH = 1280;
 constexpr auto SCENE_HEIGHT = 1280;
 
-constexpr auto SPAWN_AREA_SIZE = 2000.f;
-constexpr auto SPAWN_BODIES_COUNT = 1024;
-constexpr auto SPAWN_MAX_MASS = 1000000000.f;
+constexpr auto SPAWN_AREA_SIZE = 10000.f;
+constexpr auto SPAWN_BODIES_COUNT = 1024 * 8;
+constexpr auto SPAWN_MAX_MASS = 1000000.f;
 constexpr auto SPAWN_MAX_RADIUS = 10.f;
 constexpr auto SPAWN_MAX_ABS_SPEED = 1.f;
 
@@ -28,6 +28,8 @@ int main() {
         t.reset();
         physics.update(bodies);
         auto update_tm = t.value();
+        std::cout << "Bodies count: " << bodies.size() << '\n';
+        std::cout << "Update time: " << update_tm.count() << " ms\n";
 
         window.draw(WINDOW_NAME, bodies, SPAWN_AREA_SIZE * 2);
         key = cv::waitKey(1); // TEMPORARY
