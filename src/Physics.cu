@@ -3,6 +3,8 @@
 //
 
 #include "Physics.hpp"
+#include <algorithm>
+#include <limits>
 
 __device__ bool intersect(const Body &l, const Body &r) {
     float X = l.x - r.x, Y = l.y - r.y, R = r.radius + l.radius;
@@ -77,7 +79,7 @@ __device__ void update_positions(Body *body_vec, size_t bodies_count) {
         auto F = 6.674184 * 10e-9 * (current_body.mass * tmp.mass) / D2;
         auto D = sqrt(D2);
 
-        if(D < (tmp.radius + current_body.radius))
+        if (D < (tmp.radius + current_body.radius))
             continue;
 
         Fx += F * X / D;
@@ -100,11 +102,33 @@ Physics::Physics() : gpu_bodies_vec_(nullptr) {}
 Physics::~Physics() {
     if (gpu_bodies_vec_)
         cudaFree(gpu_bodies_vec_);
-};
+}
 
-void Physics::load(const std::vector<Body> &bodies) {
+void Physics::load(std::vector<Body> &bodies) {
     if (gpu_bodies_vec_)
         cudaFree(gpu_bodies_vec_);
+
+    float min_X, min_Y, max_X, max_Y;
+    max_X = max_Y = std::numeric_limits<float>::lowest();
+    min_X = min_Y = std::numeric_limits<float>::max();
+
+    for (const Body &b : bodies) {
+        if (min_X > b.x)
+            min_X = b.x;
+        else if (max_X < b.x)
+            max_X = b.x;
+
+        if (min_Y > b.y)
+            min_Y = b.y;
+        else if (max_Y < b.y)
+            max_Y = b.y;
+    }
+
+    std::sort(std::begin(bodies), std::end(bodies), [min_X, min_Y, max_X, max_Y](Body &a, Body &b) {
+        auto diff = (b.y - a.y) * 2 + b.x - a.x;
+        if (b.y < a.y) diff -= 10;
+        return diff > 0;
+    });
 
     cudaMalloc(&gpu_bodies_vec_, sizeof(Body) * bodies.size());
     // cuda Malloc Host

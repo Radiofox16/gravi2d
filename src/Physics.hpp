@@ -7,16 +7,16 @@
 
 #include "Body.hpp"
 #include <vector>
+#include <memory>
 
 class Physics {
     Body *gpu_bodies_vec_;
 
 public:
     Physics();
-
     ~Physics();
 
-    void load(const std::vector<Body> &bodies);
+    void load(std::vector<Body> &bodies);
 
     void update(std::vector<Body> &bodies);
 };

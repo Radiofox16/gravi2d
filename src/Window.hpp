@@ -60,11 +60,29 @@ public:
         auto coord_bias = horizontal_scene_size / 2.f;
         auto pix_per_coord = t_width / horizontal_scene_size;
 
+        double full_mass_sum = 0.;
         for (const auto &body : bodies) {
-            auto x = static_cast<int>((body.x + coord_bias) * pix_per_coord);
-            auto y = static_cast<int>((body.y + coord_bias) * pix_per_coord);
+            full_mass_sum += body.mass;
+        }
+        double full_mass_sum_mul_y = 0.;
+        double full_mass_sum_mul_x = 0.;
 
-            cv::circle(scene_, {x, y}, static_cast<int>(body.radius * pix_per_coord),
+        for (const auto &body : bodies) {
+            if (std::abs(body.mass) < 0.1f)
+                continue;
+
+            full_mass_sum_mul_x += (static_cast<double>(body.mass) * body.x) / full_mass_sum;
+            full_mass_sum_mul_y += (static_cast<double>(body.mass) * body.y) / full_mass_sum;
+        }
+
+        auto x_offst = static_cast<int>(full_mass_sum_mul_x);
+        auto y_offst = static_cast<int>(full_mass_sum_mul_y);
+
+        for (const auto &body : bodies) {
+            auto x = static_cast<int>((body.x + coord_bias - x_offst) * pix_per_coord);
+            auto y = static_cast<int>((body.y + coord_bias - y_offst) * pix_per_coord);
+
+            cv::circle(scene_, cv::Point{x, y}, static_cast<int>(body.radius * pix_per_coord),
                        BODIES_COLORS[body.id % BODIES_COLORS.size()], cv::FILLED);
         }
 
