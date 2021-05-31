@@ -18,8 +18,8 @@ __device__ void merge_two_bodies(Body &a, const Body &b) {
     if (a.mass == 0.f || b.mass == 0.f)
         return;
 
-    a.x = (a.x + b.x) / 2;
-    a.y = (a.y + b.y) / 2;
+    a.x = a.radius > b.radius ? a.x : b.x;
+    a.y = a.radius > b.radius ? a.y : b.y;
 
     a.radius = sqrt(a.radius * a.radius + b.radius * b.radius);
 
@@ -30,11 +30,11 @@ __device__ void merge_two_bodies(Body &a, const Body &b) {
     a.mass = mass_sum;
 }
 
-__device__ void merge(Body *body_vec, int bodies_count) {
+__device__ void merge(const Body *body_vec_in, Body *body_vec_out, int bodies_count) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     __shared__ Body cached_bodies[THREAD_WARP_SIZE];
-    Body current_body = body_vec[idx];
+    Body current_body = body_vec_in[idx];
 
     cached_bodies[threadIdx.x] = idx < bodies_count ? current_body : Body{0, 0, 0, 0, 0, 0, 0, idx, -1000};
 
@@ -58,7 +58,7 @@ __device__ void merge(Body *body_vec, int bodies_count) {
     __syncthreads();
 
     for (int i = 0; i < blockIdx.x; i++) {
-        cached_bodies[threadIdx.x] = body_vec[i * blockDim.x + threadIdx.x];
+        cached_bodies[threadIdx.x] = body_vec_in[i * blockDim.x + threadIdx.x];
         __syncthreads();
 
         if (current_body.mass == 0.f) continue;
@@ -77,7 +77,7 @@ __device__ void merge(Body *body_vec, int bodies_count) {
         if (i * blockDim.x + threadIdx.x > bodies_count) {
             cached_bodies[threadIdx.x] = {0, 0, 0, 0, 0, 0, 0, 0, 0};
         } else {
-            cached_bodies[threadIdx.x] = body_vec[i * blockDim.x + threadIdx.x];
+            cached_bodies[threadIdx.x] = body_vec_in[i * blockDim.x + threadIdx.x];
         }
 
         __syncthreads();
@@ -94,10 +94,10 @@ __device__ void merge(Body *body_vec, int bodies_count) {
         }
     }
 
-    body_vec[idx] = current_body;
+    body_vec_out[idx] = current_body;
 }
 
-__device__ void update_positions(Body *body_vec, size_t bodies_count) {
+__device__ void update_positions(const Body *body_vec_in, Body *body_vec_out, int bodies_count) {
     constexpr auto step = 1.f;
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx > bodies_count)
@@ -105,10 +105,13 @@ __device__ void update_positions(Body *body_vec, size_t bodies_count) {
 
     float Fx = 0., Fy = 0.;
 
-    Body current_body = body_vec[idx];
+    Body current_body = body_vec_out[idx];
     for (int i = 0; i < bodies_count; i++) {
-        auto tmp = body_vec[i];
-
+        auto tmp = body_vec_in[i];
+    
+        if (current_body.mass == 0.f)
+            continue;
+        
         if (idx == i || tmp.mass == 0.f)
             continue;
 
@@ -124,27 +127,33 @@ __device__ void update_positions(Body *body_vec, size_t bodies_count) {
         Fy += F * Y / D;
     }
 
-    body_vec[idx].x += current_body.speed_x * step;
-    body_vec[idx].y += current_body.speed_y * step;
-    body_vec[idx].speed_x += Fx * step / current_body.mass;
-    body_vec[idx].speed_y += Fy * step / current_body.mass;
+    current_body.x += current_body.speed_x * step;
+    current_body.y += current_body.speed_y * step;
+    current_body.speed_x += Fx * step / current_body.mass;
+    current_body.speed_y += Fy * step / current_body.mass;
+
+    body_vec_out[idx] = current_body;
 }
 
-__global__ void update_gpu_bodies(Body *body_vec, int bodies_count) {
-    merge(body_vec, bodies_count);
-    update_positions(body_vec, bodies_count);
+__global__ void update_gpu_bodies(const Body *body_vec_in, Body *body_vec_out, int bodies_count) {
+    merge(body_vec_in, body_vec_out, bodies_count);
+    update_positions(body_vec_in, body_vec_out, bodies_count);
 }
 
-Physics::Physics() : gpu_bodies_vec_(nullptr) {}
+Physics::Physics() : gpu_bodies_vec_a_(nullptr) {}
 
 Physics::~Physics() {
-    if (gpu_bodies_vec_)
-        cudaFree(gpu_bodies_vec_);
+    if (gpu_bodies_vec_a_){
+        cudaFree(gpu_bodies_vec_a_);
+        cudaFree(gpu_bodies_vec_b_);
+    }
 }
 
 void Physics::load(std::vector<Body> &bodies) {
-    if (gpu_bodies_vec_)
-        cudaFree(gpu_bodies_vec_);
+    if (gpu_bodies_vec_a_){
+        cudaFree(gpu_bodies_vec_a_);
+        cudaFree(gpu_bodies_vec_b_);
+    }
 
     float min_X, min_Y, max_X, max_Y;
     max_X = max_Y = std::numeric_limits<float>::lowest();
@@ -168,9 +177,10 @@ void Physics::load(std::vector<Body> &bodies) {
         return diff > 0;
     });
 
-    cudaMalloc(&gpu_bodies_vec_, sizeof(Body) * bodies.size());
+    cudaMalloc(&gpu_bodies_vec_a_, sizeof(Body) * bodies.size());
+    cudaMalloc(&gpu_bodies_vec_b_, sizeof(Body) * bodies.size());
     // cuda Malloc Host
-    cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
+    cudaMemcpy(gpu_bodies_vec_a_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
 }
 
 void Physics::update(std::vector<Body> &bodies) {
@@ -194,9 +204,9 @@ void Physics::update(std::vector<Body> &bodies) {
     dim3 threads = dim3(THREAD_WARP_SIZE, 1);
     dim3 blocks = bodies.size() / threads.x != 0 ? dim3((bodies.size() / threads.x) + 1, 1) : dim3(1, 1);
 
-    cudaMemcpy(gpu_bodies_vec_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
-    update_gpu_bodies<<<blocks, threads>>>(gpu_bodies_vec_, bodies.size());
-    cudaMemcpy(bodies.data(), gpu_bodies_vec_, sizeof(Body) * bodies.size(), cudaMemcpyDeviceToHost);
+    cudaMemcpy(gpu_bodies_vec_a_, bodies.data(), sizeof(Body) * bodies.size(), cudaMemcpyHostToDevice);
+    update_gpu_bodies<<<blocks, threads>>>(gpu_bodies_vec_a_, gpu_bodies_vec_b_, bodies.size());
+    cudaMemcpy(bodies.data(), gpu_bodies_vec_b_, sizeof(Body) * bodies.size(), cudaMemcpyDeviceToHost);
 
 //    float rad_sz = 0.f;
 //    for (auto &a: bodies) {

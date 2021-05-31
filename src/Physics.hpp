@@ -10,7 +10,8 @@
 #include <memory>
 
 class Physics {
-    Body *gpu_bodies_vec_;
+    Body *gpu_bodies_vec_a_;
+    Body *gpu_bodies_vec_b_;
 
 public:
     Physics();

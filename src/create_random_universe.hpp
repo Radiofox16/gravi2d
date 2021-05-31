@@ -37,8 +37,8 @@ create_random_universe(float spawn_square_side, std::uint_fast32_t bodies_count,
 
         b.mass = 10.f + erand48(SEED) * max_mass;
         b.radius = 0.001 + erand48(SEED) * max_radius;
-        b.speed_x = max_abs_speed * (-1.f + 2.f * erand48(SEED));
-        b.speed_y = (erand48(SEED) > 0.5f ? 1 : -1) * std::sqrt(max_abs_speed * max_abs_speed - b.speed_x * b.speed_x);
+        b.speed_x = max_abs_speed * erand48(SEED);//(-1.f + 2.f * erand48(SEED));
+        b.speed_y = 0; //(erand48(SEED) > 0.5f ? 1 : -1)* std::sqrt(max_abs_speed * max_abs_speed - b.speed_x * b.speed_x);
         b.x = spawn_square_side * (-1.f + 2.f * erand48(SEED)) / 2.f;
         b.y = spawn_square_side * (-1.f + 2.f * erand48(SEED)) / 2.f;
 

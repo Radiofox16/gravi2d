@@ -4,7 +4,7 @@ project(gravi2d LANGUAGES C CXX CUDA)
 set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(OpenCV REQUIRED PATHS /home/ilya/Develop/THIRDPARTY_LIBS/INSTALL NO_DEFAULT_PATH)
+find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 
 add_executable(gravi2d src/main.cpp src/Window.hpp src/Body.hpp src/create_random_universe.hpp src/random.hpp src/Physics.hpp src/Physics.cu)
