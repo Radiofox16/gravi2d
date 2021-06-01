@@ -48,8 +48,10 @@ class Window {
     cv::Mat scene_;
 
 public:
-    Window() : scene_(t_width, t_height, CV_8UC3, cv::Scalar(0, 0, 0)) {
-    }
+    Window() : scene_(t_width, t_height, CV_8UC3, cv::Scalar(0, 0, 0)) 
+    {}
+
+    ~Window() = default;
 
     constexpr auto width() const { return t_width; };
 

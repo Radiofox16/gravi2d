@@ -30,21 +30,23 @@ create_random_universe(float spawn_square_side, std::uint_fast32_t bodies_count,
 
     std::vector<Body> result;
 
+    uint_fast32_t aaa = std::sqrt(bodies_count);
+
     for (int bn = 0; bn < bodies_count; ++bn) {
         Body b;
 
         b.id = bn;
 
-        b.mass = 10.f + erand48(SEED) * max_mass;
-        b.radius = 0.001 + erand48(SEED) * max_radius;
-        b.speed_x = max_abs_speed * erand48(SEED);//(-1.f + 2.f * erand48(SEED));
-        b.speed_y = 0; //(erand48(SEED) > 0.5f ? 1 : -1)* std::sqrt(max_abs_speed * max_abs_speed - b.speed_x * b.speed_x);
-        b.x = spawn_square_side * (-1.f + 2.f * erand48(SEED)) / 2.f;
-        b.y = spawn_square_side * (-1.f + 2.f * erand48(SEED)) / 2.f;
+        b.mass = max_mass; //10.f + erand48(SEED) * max_mass;
+        b.radius = max_radius; //0.001 + erand48(SEED) * max_radius;
+        b.speed_x = 0.f; //max_abs_speed* (-1.f + 2.f * erand48(SEED));
+        b.speed_y = 0.f; //(erand48(SEED) > 0.5f ? 1 : -1)* std::sqrt(max_abs_speed * max_abs_speed - b.speed_x * b.speed_x);
+        b.x = spawn_square_side * (-1.f + 2.f * (bn % aaa) / float(aaa)) / 2.f;// (-1.f + 2.f * erand48(SEED)) / 2.f;
+        b.y = spawn_square_side * (-1.f + 2.f * (bn / aaa) / float(aaa)) / 2.f;// (-1.f + 2.f * erand48(SEED)) / 2.f;
 
         result.push_back(b);
     }
-
+    
     return result;
 }
 
