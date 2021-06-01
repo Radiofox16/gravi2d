@@ -23,7 +23,7 @@ struct Body {
     // Unique id
     std::int_fast32_t id;
 
-    // std::int_fast32_t dbg_1, dbg_2;
+//     std::int_fast32_t dbg_1, dbg_2;
 };
 
 
